@@ -2,6 +2,14 @@
 
 A full-stack inventory reservation system built with Next.js (App Router), Prisma, and PostgreSQL, designed to handle safe stock reservation under concurrent checkout scenarios.
 
+## LIVE DEMO LINK:
+https://allo-take-home-exercise-bindiya-sud-bindiya-sudarsun-s-projects.vercel.app
+
+## How to use:
+1. Open homepage
+2. Click Reserve
+3. Actions: Confirm / Cancel / Wait for expiry
+
 # Features
 
 * Product listing with warehouse-wise stock
