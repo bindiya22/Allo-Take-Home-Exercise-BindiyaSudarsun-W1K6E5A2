@@ -1,36 +1,144 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Inventory Reservation System (Allo Take-Home)
 
-## Getting Started
+A full-stack inventory reservation system built with Next.js (App Router), Prisma, and PostgreSQL, designed to handle safe stock reservation under concurrent checkout scenarios.
 
-First, run the development server:
+# Features
 
-```bash
+* Product listing with warehouse-wise stock
+* Stock reservation with temporary holds
+* 10-minute reservation expiry system
+* Confirm purchase flow (permanent stock deduction)
+* Cancel reservation flow (stock restoration)
+* Automatic expiry cleanup (lazy cleanup on product fetch)
+* Race-condition safe reservation using database row locking
+* Full end-to-end checkout simulation UI
+
+This system solves a common e-commerce issue:
+Preventing overselling when multiple users try to purchase the last available units simultaneously.
+
+# Concurrency Handling
+To ensure correct behavior under concurrent requests, the reservation API uses PostgreSQL row-level locking:
+
+SELECT *
+FROM "Inventory"
+WHERE "productId" = $1
+AND "warehouseId" = $2
+FOR UPDATE
+
+### Why this matters:
+* Prevents multiple transactions from reading the same stock simultaneously
+* Ensures only one reservation succeeds for the last available unit
+* Eliminates race conditions during checkout
+
+# Reservation Expiry System
+Each reservation has an "expiresAt" timestamp (set to 10 minutes.)
+
+### Expiry handling approach:
+Expired reservations are automatically cleaned up when "/api/products" is called
+During cleanup:
+  * reservedStock is decremented
+  * reservation status is set to RELEASED
+
+This is a lazy cleanup strategy, ensuring simplicity without background workers.
+
+# Data Model Overview
+
+### Product
+Represents items available for purchase.
+
+### Warehouse
+Stores inventory per location.
+
+### Inventory
+Tracks stock per product per warehouse:
+* totalStock
+* reservedStock
+
+### Reservation
+
+Tracks temporary holds:
+* PENDING
+* CONFIRMED
+* RELEASED
+* expiresAt
+
+# API Overview
+
+## Products
+GET /api/products
+Returns all products with computed available stock.
+
+## Create Reservation
+POST /api/reservations
+
+Request:
+{
+  "productId": "[product_id]",
+  "warehouseId": "[warehouse_id]",
+  "quantity": 1
+}
+
+Response:
+* "409" if insufficient stock
+* Returns reservation object on success
+
+## Confirm Reservation
+POST /api/reservations/:id/confirm
+* Confirms purchase
+* Converts reservation into final stock deduction
+* Returns "410" if expired
+
+## Release Reservation
+POST /api/reservations/:id/release
+* Cancels reservation early
+* Restores stock
+
+## Get Reservation
+GET /api/reservations/:id
+Returns reservation details with product + warehouse info.
+
+# Frontend Flow
+1. User views product list
+2. Clicks "Reserve"
+3. Redirected to reservation page
+4. Countdown timer starts (10 min)
+5. User can:
+   * Confirm purchase
+   * Cancel reservation
+   * Wait for expiry
+
+UI updates automatically after actions.
+
+# How Expiry Works
+* Reservations expire after 10 minutes
+* Expired reservations are cleaned when "/api/products" is fetched
+* Stock is automatically restored during cleanup
+
+# Trade-offs
+
+### 1. Lazy Expiry Cleanup
+Instead of background workers (cron jobs), expiry is handled during product fetch.
+This simplifies architecture but depends on user traffic.
+
+### 2. No Redis Locking
+Database-level locking was used instead of Redis for simplicity.
+
+### 3. Basic UI
+UI is minimal and functional, focused on system behavior rather than design.
+
+# How to Run Locally
+npm install
+
+# Set environment variables:
+DATABASE_URL=[postgres_url]
+
+# Run migrations:
+npx prisma db push
+
+# Seed database:
+npx prisma db seed
+
+# Start server:
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
-
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
